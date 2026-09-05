@@ -55,7 +55,7 @@ func (r *UserRepository) Create(ctx context.Context, u *user.User) error {
 	return err
 }
 
-func (r *UserRepository) GetByUsername(ctx context.Context, username string) (*user.User, error) {
+func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*user.User, error) {
 	const query = `
 		SELECT
 			id,

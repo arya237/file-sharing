@@ -9,6 +9,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+type JWTConfig struct {
+	Secret string        `env:"SECRET"`
+	Expire time.Duration `env:"EXPIRE"`
+}
+
 type JWTTokenService struct {
 	secret     []byte
 	expiration time.Duration
