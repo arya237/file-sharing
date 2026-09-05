@@ -1,6 +1,7 @@
 package security
 
 import (
+	"errors"
 	"time"
 
 	"uuid"
@@ -32,4 +33,33 @@ func (s *JWTTokenService) Generate(userID uuid.UUID) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	return token.SignedString(s.secret)
+}
+
+func (s *JWTTokenService) Validate(tokenString string) (uuid.UUID, error) {
+	token, err := jwt.Parse(
+		tokenString,
+		func(token *jwt.Token) (interface{}, error) {
+			if token.Method != jwt.SigningMethodHS256 {
+				return nil, errors.New("unexpected signing method")
+			}
+
+			return s.secret, nil
+		},
+	)
+
+	if err != nil || !token.Valid {
+		return uuid.Nil(), errors.New("invalid token")
+	}
+
+	sub, err := token.Claims.GetSubject()
+	if err != nil {
+		return uuid.Nil(), err
+	}
+
+	userID, err := uuid.Parse(sub)
+	if err != nil {
+		return uuid.Nil(), err
+	}
+
+	return userID, nil
 }

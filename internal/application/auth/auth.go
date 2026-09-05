@@ -61,6 +61,10 @@ func (u *UseCase) Register(ctx context.Context, input *RegisterInput) (*Register
 	}
 
 	if err := u.users.Create(ctx, newUser); err != nil {
+		if errors.Is(err, user.ErrConflict) {
+			return nil, apperr.Conflict("auth", "username already exists", err)
+		}
+
 		return nil, apperr.Dependency("auth", "failed to create user", err)
 	}
 

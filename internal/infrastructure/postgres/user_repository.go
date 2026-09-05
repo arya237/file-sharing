@@ -6,6 +6,7 @@ import (
 
 	"github.com/arya237/file-sharing/internal/domain/user"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -40,6 +41,16 @@ func (r *UserRepository) Create(ctx context.Context, u *user.User) error {
 		u.CreatedAt,
 		u.UpdatedAt,
 	)
+
+	if err != nil {
+		var pgErr *pgconn.PgError
+
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return user.ErrConflict
+		}
+
+		return err
+	}
 
 	return err
 }
