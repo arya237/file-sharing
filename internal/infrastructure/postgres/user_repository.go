@@ -67,7 +67,7 @@ func (r *UserRepository) GetByUsername(ctx context.Context, username string) (*u
 	)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, err
+		return nil, user.ErrNotFound
 	}
 
 	if err != nil {
