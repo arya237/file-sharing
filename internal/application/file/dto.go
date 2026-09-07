@@ -28,3 +28,13 @@ type ListInput struct {
 type ListOutput struct {
 	Files []file.File
 }
+
+type DownloadInput struct {
+	FileID  uuid.UUID
+	OwnerID uuid.UUID
+}
+
+type DownloadOutput struct {
+	File *file.File
+	Reader io.ReadCloser
+}
