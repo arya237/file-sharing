@@ -22,7 +22,7 @@ func NewPool(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
 		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
 		cfg.User,
 		cfg.Password,
-		//cfg.Host,
+		cfg.Host,
 		cfg.Port,
 		cfg.DBName,
 		cfg.SSLMode,

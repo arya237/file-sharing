@@ -30,6 +30,6 @@ func main() {
 
 	router := http.NewRouter(authHandler)
 
-	log.Fatal(router.Run(":8080"))
+	log.Fatal(router.Run("localhost:8080"))
 
 }

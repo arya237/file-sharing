@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -9,6 +10,7 @@ import (
 )
 
 func WriteError(c *gin.Context, err error) {
+	log.Println(err)
 	appErr, ok := apperr.As(err)
 
 	if !ok {
