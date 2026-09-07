@@ -18,7 +18,6 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	Message   string `json:"message"`
-	Token     string `json:"token"`
-	TokenType string `json:"token_type"`
+	Message string    `json:"message"`
+	UserID  uuid.UUID `json:"userID"`
 }

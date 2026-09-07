@@ -2,6 +2,7 @@ package auth
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/arya237/file-sharing/internal/apperr"
 	"github.com/arya237/file-sharing/internal/application/auth"
@@ -56,9 +57,18 @@ func (h *AuthHandler) Loign(c *gin.Context) {
 		handler.WriteError(c, err)
 	}
 
+	c.SetCookie(
+		"access_token",
+		output.AccessToken,
+		int(12*time.Hour),
+		"/",
+		"",
+		true,
+		true,
+	)
+
 	c.JSON(http.StatusOK, LoginResponse{
-		Message:   "login was successful",
-		Token:     output.AccessToken,
-		TokenType: "Bearer",
+		Message: "login was successful",
+		UserID:  output.UserID,
 	})
 }

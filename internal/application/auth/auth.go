@@ -99,5 +99,5 @@ func (u *UseCase) Login(ctx context.Context, input *LoginInput) (*LoginOutput, e
 		)
 	}
 
-	return &LoginOutput{AccessToken: token}, nil
+	return &LoginOutput{AccessToken: token, UserID: existingUser.ID}, nil
 }

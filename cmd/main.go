@@ -5,9 +5,13 @@ import (
 	"log"
 
 	authService "github.com/arya237/file-sharing/internal/application/auth"
+	fileService "github.com/arya237/file-sharing/internal/application/file"
+	local "github.com/arya237/file-sharing/internal/infrastructure/storage"
+
 	"github.com/arya237/file-sharing/internal/config"
 	"github.com/arya237/file-sharing/internal/delivery/http"
 	auth "github.com/arya237/file-sharing/internal/delivery/http/handler/auth"
+	file "github.com/arya237/file-sharing/internal/delivery/http/handler/file"
 	"github.com/arya237/file-sharing/internal/infrastructure/postgres"
 	"github.com/arya237/file-sharing/internal/infrastructure/security"
 )
@@ -25,10 +29,16 @@ func main() {
 	tokenService := security.NewJWTTokenService(cfg.JWT.Secret, cfg.JWT.Expire)
 
 	userRepo := postgres.NewUserRepository(db)
-	authUsecase := authService.NewUseCase(userRepo, passwordHasher, tokenService)
-	authHandler := auth.NewAuthHandler(authUsecase)
+	fileRepo := postgres.NewFileRepository(db)
+	storageRepo := local.NewStorage(cfg.Filepath)
 
-	router := http.NewRouter(authHandler)
+	authUsecase := authService.NewUseCase(userRepo, passwordHasher, tokenService)
+	fileUsecase := fileService.NewFileUseCase(fileRepo, storageRepo)
+
+	authHandler := auth.NewAuthHandler(authUsecase)
+	fileHandler := file.NewFileHandler(fileUsecase)
+
+	router := http.NewRouter(authHandler, fileHandler, tokenService)
 
 	log.Fatal(router.Run("localhost:8080"))
 

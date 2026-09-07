@@ -2,12 +2,13 @@ package file
 
 import (
 	"context"
+	"errors"
 	"io"
 	"path/filepath"
 	"strings"
 	"time"
 	"uuid"
-	"errors"
+
 	"github.com/arya237/file-sharing/internal/apperr"
 	"github.com/arya237/file-sharing/internal/domain/file"
 )
@@ -42,11 +43,7 @@ func (u *UseCase) UploadFile(ctx context.Context, input UploadInput) (*UploadOut
 	}
 
 	if input.Reader == nil {
-		return nil, apperr.InvalidInput(
-			"file",
-			"file content is required",
-			nil,
-		)
+		return nil, apperr.InvalidInput("file", "file content is required", nil)
 	}
 
 	if input.Size <= 0 || input.Size > 1024*1024*100 {
@@ -72,14 +69,14 @@ func (u *UseCase) UploadFile(ctx context.Context, input UploadInput) (*UploadOut
 
 	err := u.storage.Save(ctx, newFile.StorageKey, input.Reader)
 	if err != nil {
-		return nil, apperr.Dependency("file_usecase", "failed to store file", nil)
+		return nil, apperr.Dependency("file_usecase", "failed to store file", err)
 	}
 
 	if err := u.fileRepo.Create(ctx, newFile); err != nil {
-		return nil, apperr.Dependency("file_usecase", "failed to save file metadate", nil)
+		return nil, apperr.Dependency("file_usecase", "failed to save file metadate", err)
 	}
 
-	return &UploadOutput{File: newFile,}, nil
+	return &UploadOutput{File: newFile}, nil
 
 }
 
@@ -104,7 +101,7 @@ func (u *UseCase) ListFile(ctx context.Context, input ListInput) (*ListOutput, e
 	return &ListOutput{Files: files}, nil
 }
 
-func (u *UseCase) DownloadFile(ctx context.Context, input DownloadInput) (*DownloadOutput, error){
+func (u *UseCase) DownloadFile(ctx context.Context, input DownloadInput) (*DownloadOutput, error) {
 
 	if input.FileID == uuid.Nil() {
 		return nil, apperr.InvalidInput("file_usecase", "file id is required", nil)
@@ -132,7 +129,7 @@ func (u *UseCase) DownloadFile(ctx context.Context, input DownloadInput) (*Downl
 		return nil, apperr.Dependency("file_usecase", "failed to open file", err)
 	}
 
-	return &DownloadOutput{File:   f, Reader: reader}, nil
+	return &DownloadOutput{File: f, Reader: reader}, nil
 }
 
 func (u *UseCase) DeleteFile(ctx context.Context, fileID uuid.UUID, ownerID uuid.UUID) error {

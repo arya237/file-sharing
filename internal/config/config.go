@@ -6,6 +6,7 @@ import (
 )
 
 type Config struct {
-	DB  postgres.Config    `envPrefix:"POSTGRES_"`
-	JWT security.JWTConfig `envPrefix:"JWT_"`
+	DB       postgres.Config    `envPrefix:"POSTGRES_"`
+	JWT      security.JWTConfig `envPrefix:"JWT_"`
+	Filepath string             `env:"FILEPATH"`
 }
