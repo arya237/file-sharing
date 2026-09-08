@@ -56,7 +56,7 @@ func (h *ShareHandler) Create(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, createShareResponse{
 		ID:        result.Share.ID,
-		URL:       "/api/shares/" + result.Token,
+		URL:       "/api/share/" + result.Token,
 		ExpiresAt: result.Share.ExpiresAt,
 	})
 }
@@ -93,7 +93,7 @@ func (h *ShareHandler) AccessShare(c *gin.Context) {
 		result.Reader,
 	)
 
-	//result.Reader.Close()
+	result.Reader.Close()
 }
 
 func (h *ShareHandler) RevokeShare(c *gin.Context) {

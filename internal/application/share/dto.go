@@ -1,10 +1,10 @@
 package share
 
 import (
-	"io"
 	"time"
 	"uuid"
 
+	"github.com/arya237/file-sharing/internal/application/storage"
 	"github.com/arya237/file-sharing/internal/domain/file"
 	"github.com/arya237/file-sharing/internal/domain/share"
 )
@@ -25,10 +25,9 @@ type AccessInput struct {
 }
 
 type AccessOutput struct {
-	Share *share.Share
-	File  *file.File
-	//Reader io.ReadCloser
-	Reader io.ReadSeeker
+	Share  *share.Share
+	File   *file.File
+	Reader storage.ReadSeekCloser
 }
 
 type RevokeInput struct {

@@ -10,18 +10,18 @@ import (
 	"uuid"
 
 	"github.com/arya237/file-sharing/internal/apperr"
+	"github.com/arya237/file-sharing/internal/application/storage"
 	"github.com/arya237/file-sharing/internal/domain/file"
 	"github.com/arya237/file-sharing/internal/domain/share"
-	local "github.com/arya237/file-sharing/internal/infrastructure/storage"
 )
 
 type UseCase struct {
 	shareRepo share.Repository
 	fileRepo  file.Repository
-	storage   local.Storage
+	storage   storage.Storage
 }
 
-func NewShareUseCase(shareRepo share.Repository, fileRepo file.Repository, storage local.Storage) *UseCase {
+func NewShareUseCase(shareRepo share.Repository, fileRepo file.Repository, storage storage.Storage) *UseCase {
 	return &UseCase{
 		shareRepo: shareRepo,
 		fileRepo:  fileRepo,

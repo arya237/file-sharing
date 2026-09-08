@@ -6,7 +6,9 @@ import (
 
 	authService "github.com/arya237/file-sharing/internal/application/auth"
 	fileService "github.com/arya237/file-sharing/internal/application/file"
-	local "github.com/arya237/file-sharing/internal/infrastructure/storage"
+	shareService "github.com/arya237/file-sharing/internal/application/share"
+	"github.com/arya237/file-sharing/internal/delivery/http/handler/share"
+	"github.com/arya237/file-sharing/internal/infrastructure/storage/local"
 
 	"github.com/arya237/file-sharing/internal/config"
 	"github.com/arya237/file-sharing/internal/delivery/http"
@@ -30,15 +32,18 @@ func main() {
 
 	userRepo := postgres.NewUserRepository(db)
 	fileRepo := postgres.NewFileRepository(db)
+	shareRepo := postgres.NewShareRepository(db)
 	storageRepo := local.NewStorage(cfg.Filepath)
 
 	authUsecase := authService.NewUseCase(userRepo, passwordHasher, tokenService)
 	fileUsecase := fileService.NewFileUseCase(fileRepo, storageRepo)
+	shareUsecase := shareService.NewShareUseCase(shareRepo, fileRepo, storageRepo)
 
 	authHandler := auth.NewAuthHandler(authUsecase)
 	fileHandler := file.NewFileHandler(fileUsecase)
+	shareHandler := share.NewShareHandler(shareUsecase)
 
-	router := http.NewRouter(authHandler, fileHandler, tokenService)
+	router := http.NewRouter(authHandler, fileHandler, shareHandler, tokenService)
 
 	log.Fatal(router.Run("localhost:8080"))
 

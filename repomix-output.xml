@@ -1,0 +1,1951 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+cmd/
+  main.go
+internal/
+  apperr/
+    error.go
+  application/
+    auth/
+      auth.go
+      dto.go
+    file/
+      dto.go
+      file.go
+    share/
+      dto.go
+      share.go
+  config/
+    config.go
+    load.go
+  delivery/
+    http/
+      handler/
+        auth/
+          auth_handler.go
+          dto.go
+        file/
+          file_handler.go
+        share/
+          dto.go
+          share_handler.go
+        error.go
+      middleware/
+        auth.go
+      router.go
+  domain/
+    file/
+      file_repository.go
+      file.go
+    share/
+      share_repository.go
+      share.go
+    user/
+      user_repository.go
+      user.go
+  infrastructure/
+    postgres/
+      file_repository.go
+      postgres.go
+      share_repository.go
+      user_repository.go
+    security/
+      password_hasher.go
+      token.go
+migrations/
+  000001_create_users.down.sql
+  000001_create_users.up.sql
+  000002_create_files.down.sql
+  000002_create_files.up.sql
+  000003_create_shares.down.sql
+  000003_create_shares.up.sql
+.env.example
+.gitignore
+AGENTS.md
+docker-compose.yml
+go.mod
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="internal/apperr/error.go">
+package apperr
+
+import (
+	"errors"
+	"fmt"
+	"net/http"
+)
+
+type ErrorCode string
+
+const (
+	ErrInternal     ErrorCode = "INTERNAL_ERROR"
+	ErrInvalidInput ErrorCode = "INVALID_INPUT"
+	ErrNotFound     ErrorCode = "NOT_FOUND"
+	ErrDependency   ErrorCode = "DEPENDENCY_ERROR"
+	ErrTimeout      ErrorCode = "TIMEOUT"
+	ErrConflict     ErrorCode = "DUPLICATE_ERROR"
+	ErrUnauthorized ErrorCode = "UNAUTHORIZED"
+	ErrForbidden    ErrorCode = "FORBIDDEN"
+)
+
+type AppError struct {
+	Status  int
+	Code    ErrorCode
+	Message string
+	Module  string
+	Err     error
+}
+
+func (e *AppError) Error() string {
+	if e.Err != nil {
+		return fmt.Sprintf("[%s/%s] %s: %v",
+			e.Module,
+			e.Code,
+			e.Message,
+			e.Err,
+		)
+	}
+
+	return fmt.Sprintf("[%s/%s] %s",
+		e.Module,
+		e.Code,
+		e.Message,
+	)
+}
+
+func (e *AppError) Unwrap() error {
+	return e.Err
+}
+
+func New(
+	status int,
+	code ErrorCode,
+	module string,
+	message string,
+	cause error,
+) *AppError {
+	return &AppError{
+		Status:  status,
+		Code:    code,
+		Module:  module,
+		Message: message,
+		Err:     cause,
+	}
+}
+
+func InvalidInput(module, msg string, cause error) *AppError {
+	return New(
+		http.StatusBadRequest,
+		ErrInvalidInput,
+		module,
+		msg,
+		cause,
+	)
+}
+
+func Unauthorized(module, msg string, cause error) *AppError {
+	return New(
+		http.StatusUnauthorized,
+		ErrUnauthorized,
+		module,
+		msg,
+		cause,
+	)
+}
+
+func Forbidden(module, msg string, cause error) *AppError {
+	return New(
+		http.StatusForbidden,
+		ErrForbidden,
+		module,
+		msg,
+		cause,
+	)
+}
+
+func NotFound(module, msg string, cause error) *AppError {
+	return New(
+		http.StatusNotFound,
+		ErrNotFound,
+		module,
+		msg,
+		cause,
+	)
+}
+
+func Dependency(module, msg string, cause error) *AppError {
+	return New(
+		http.StatusServiceUnavailable,
+		ErrDependency,
+		module,
+		msg,
+		cause,
+	)
+}
+
+func Conflict(module, msg string, cause error) *AppError {
+	return New(
+		http.StatusConflict,
+		ErrConflict,
+		module,
+		msg,
+		cause,
+	)
+}
+
+func Timeout(module, msg string, cause error) *AppError {
+	return New(
+		http.StatusGatewayTimeout,
+		ErrTimeout,
+		module,
+		msg,
+		cause,
+	)
+}
+
+func Internal(module string, cause error) *AppError {
+	return New(
+		http.StatusInternalServerError,
+		ErrInternal,
+		module,
+		"internal server error",
+		cause,
+	)
+}
+
+func As(err error) (*AppError, bool) {
+	var ae *AppError
+
+	if !errors.As(err, &ae) {
+		return nil, false
+	}
+
+	return ae, true
+}
+</file>
+
+<file path="internal/config/load.go">
+package config
+
+import (
+	"log"
+
+	"github.com/caarlos0/env/v11"
+	"github.com/joho/godotenv"
+)
+
+func New() *Config {
+	var cfg Config
+
+	if err := godotenv.Load(); err != nil {
+		log.Println("Warning: No ..env file found, using system environment")
+	}
+
+	if err := env.Parse(&cfg); err != nil {
+		log.Fatal(err)
+	}
+
+	return &cfg
+}
+</file>
+
+<file path="internal/delivery/http/handler/file/file_handler.go">
+package file
+
+import (
+	"net/http"
+	"strconv"
+	"uuid"
+
+	"github.com/arya237/file-sharing/internal/apperr"
+	"github.com/arya237/file-sharing/internal/application/file"
+	"github.com/arya237/file-sharing/internal/delivery/http/handler"
+	"github.com/arya237/file-sharing/internal/delivery/http/middleware"
+	"github.com/gin-gonic/gin"
+)
+
+type FileHandler struct {
+	file *file.UseCase
+}
+
+func NewFileHandler(file *file.UseCase) *FileHandler {
+	return &FileHandler{file: file}
+}
+
+func (h *FileHandler) UploadFile(c *gin.Context) {
+	userID := getUserID(c)
+
+	header, err := c.FormFile("file")
+	if err != nil {
+		handler.WriteError(c, apperr.InvalidInput("file_handler", "failed to open uploaded file", err))
+		return
+	}
+
+	src, err := header.Open()
+	if err != nil {
+		handler.WriteError(c, apperr.InvalidInput("file_handler", "file is required", err))
+		return
+	}
+	defer src.Close()
+
+	output, err := h.file.UploadFile(c.Request.Context(), file.UploadInput{
+		OwnerID:  userID,
+		Name:     header.Filename,
+		MIMEType: header.Header.Get("Content-Type"),
+		Size:     header.Size,
+		Reader:   src,
+	})
+
+	if err != nil {
+		handler.WriteError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, output.File)
+}
+
+func (h *FileHandler) ListFiles(c *gin.Context) {
+	userID := getUserID(c)
+
+	offset, err := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if err != nil {
+		handler.WriteError(c, apperr.InvalidInput("file_handler", "invalid offset", err))
+		return
+	}
+
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if err != nil {
+		handler.WriteError(c, apperr.InvalidInput("file_handler", "invalid limit", err))
+		return
+	}
+
+	output, err := h.file.ListFile(c.Request.Context(), file.ListInput{
+		OwnerID: userID,
+		Offset:  offset,
+		Limit:   limit,
+	})
+
+	if err != nil {
+		handler.WriteError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, output)
+}
+
+func (h *FileHandler) DownloadFile(c *gin.Context) {
+	userID := getUserID(c)
+
+	fileID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		handler.WriteError(c, apperr.InvalidInput("file_handler", "invalid file id", err))
+		return
+	}
+
+	output, err := h.file.DownloadFile(c.Request.Context(), file.DownloadInput{
+		FileID:  fileID,
+		OwnerID: userID,
+	},
+	)
+
+	if err != nil {
+		handler.WriteError(c, err)
+		return
+	}
+
+	defer output.Reader.Close()
+
+	c.Header("Content-Disposition", `attachment; filename="`+output.File.Name+`"`)
+
+	c.DataFromReader(
+		http.StatusOK,
+		output.File.Size,
+		output.File.MIMEType,
+		output.Reader,
+		nil,
+	)
+}
+
+func (h *FileHandler) DeleteFile(c *gin.Context) {
+	userID := getUserID(c)
+
+	fileID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		handler.WriteError(c, apperr.InvalidInput("file_handler", "invalid file id", err))
+		return
+	}
+
+	if err := h.file.DeleteFile(c.Request.Context(), fileID, userID); err != nil {
+		handler.WriteError(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func getUserID(c *gin.Context) uuid.UUID {
+	value, exists := c.Get(middleware.UserIDKey)
+	if !exists {
+		return uuid.Nil()
+	}
+
+	userID, ok := value.(uuid.UUID)
+	if !ok {
+		return uuid.Nil()
+	}
+
+	return userID
+}
+</file>
+
+<file path="internal/delivery/http/handler/share/dto.go">
+package share
+
+import (
+	"time"
+	"uuid"
+)
+
+type createShareRequest struct {
+	ExpiresAt *time.Time `json:"expires_at"`
+}
+
+type createShareResponse struct {
+	ID        uuid.UUID  `json:"id"`
+	URL       string     `json:"url"`
+	ExpiresAt *time.Time `json:"expires_at"`
+}
+</file>
+
+<file path="internal/domain/file/file.go">
+package file
+
+import (
+	"time"
+	"uuid"
+)
+
+type File struct {
+	ID         uuid.UUID
+	OwnerID    uuid.UUID
+	Name       string
+	StorageKey string
+	MIMEType   string
+	Size       int64
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+</file>
+
+<file path="internal/domain/share/share.go">
+package share
+
+import (
+	"time"
+	"uuid"
+)
+
+type Share struct {
+	ID        uuid.UUID
+	FileID    uuid.UUID
+	TokenHash string
+	ExpiresAt *time.Time
+	CreatedAt time.Time
+	RevokedAt *time.Time
+}
+
+func (s Share) IsRevoked() bool {
+	return s.RevokedAt != nil
+}
+
+func (s Share) IsExpired(now time.Time) bool {
+	if s.ExpiresAt == nil {
+		return false
+	}
+
+	return !now.Before(*s.ExpiresAt)
+}
+
+func (s Share) IsActive(now time.Time) bool {
+	return !s.IsRevoked() && !s.IsExpired(now)
+}
+
+func (s *Share) Revoke(now time.Time) {
+	if s.RevokedAt == nil {
+		s.RevokedAt = &now
+	}
+}
+</file>
+
+<file path="internal/domain/user/user.go">
+package user
+
+import (
+	"time"
+	"uuid"
+)
+
+type User struct {
+	ID           uuid.UUID
+	Username     string
+	PasswordHash string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+</file>
+
+<file path="internal/infrastructure/security/password_hasher.go">
+package security
+
+import "golang.org/x/crypto/bcrypt"
+
+type BcryptPasswordHasher struct {
+	cost int
+}
+
+func NewBcryptPasswordHasher(cost int) *BcryptPasswordHasher {
+	return &BcryptPasswordHasher{
+		cost: cost,
+	}
+}
+
+func (h *BcryptPasswordHasher) Hash(password string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword(
+		[]byte(password),
+		h.cost,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return string(hash), nil
+}
+
+func (h *BcryptPasswordHasher) Compare(hash string, password string) error {
+	return bcrypt.CompareHashAndPassword(
+		[]byte(hash),
+		[]byte(password),
+	)
+}
+</file>
+
+<file path="migrations/000001_create_users.down.sql">
+DROP TABLE users;
+</file>
+
+<file path="migrations/000001_create_users.up.sql">
+CREATE TABLE users (
+    id UUID PRIMARY KEY,
+    username VARCHAR(100) NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);
+</file>
+
+<file path="migrations/000003_create_shares.up.sql">
+CREATE TABLE shares (
+    id UUID PRIMARY KEY,
+    file_id UUID NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ,
+
+    CONSTRAINT fk_shares_file
+        FOREIGN KEY (file_id)
+            REFERENCES files(id)
+            ON DELETE CASCADE
+);
+
+CREATE INDEX idx_shares_file_id
+    ON shares (file_id);
+</file>
+
+<file path="internal/application/auth/dto.go">
+package auth
+
+import "uuid"
+
+type RegisterInput struct {
+	Username string
+	Password string
+}
+
+type RegisterOutput struct {
+	UserID   uuid.UUID
+	Username string
+}
+
+type LoginInput struct {
+	Username string
+	Password string
+}
+
+type LoginOutput struct {
+	AccessToken string
+	UserID      uuid.UUID
+}
+</file>
+
+<file path="internal/application/file/dto.go">
+package file
+
+import(
+	"uuid"
+	"io"
+	"github.com/arya237/file-sharing/internal/domain/file"
+)
+
+type UploadInput struct {
+	OwnerID  uuid.UUID
+	Name     string
+	MIMEType string
+	Size     int64
+	Reader   io.Reader
+}
+
+
+type UploadOutput struct {
+	File *file.File
+}
+
+type ListInput struct {
+	OwnerID uuid.UUID
+	Offset  int
+	Limit   int
+}
+
+type ListOutput struct {
+	Files []file.File
+}
+
+type DownloadInput struct {
+	FileID  uuid.UUID
+	OwnerID uuid.UUID
+}
+
+type DownloadOutput struct {
+	File *file.File
+	Reader io.ReadCloser
+}
+</file>
+
+<file path="internal/application/share/dto.go">
+package share
+
+import (
+	"time"
+	"uuid"
+
+	"github.com/arya237/file-sharing/internal/domain/file"
+	"github.com/arya237/file-sharing/internal/domain/share"
+)
+
+type CreateShareInput struct {
+	UserID    uuid.UUID
+	FileID    uuid.UUID
+	ExpiresAt *time.Time
+}
+
+type CreateShareOutput struct {
+	Share *share.Share
+	Token string
+}
+
+type AccessInput struct {
+	Token string
+}
+
+type AccessOutput struct {
+	Share  *share.Share
+	File   *file.File
+	Reader ReadSeekCloser
+}
+
+type RevokeInput struct {
+	UserID  uuid.UUID
+	ShareID uuid.UUID
+}
+</file>
+
+<file path="internal/application/share/share.go">
+package share
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"errors"
+	"io"
+	"time"
+	"uuid"
+
+	"github.com/arya237/file-sharing/internal/apperr"
+	"github.com/arya237/file-sharing/internal/domain/file"
+	"github.com/arya237/file-sharing/internal/domain/share"
+)
+
+type ReadSeekCloser interface {
+	io.Reader
+	io.Seeker
+	io.Closer
+}
+
+type Storage interface {
+	Save(ctx context.Context, key string, reader io.Reader) error
+	Open(ctx context.Context, key string) (ReadSeekCloser, error)
+	Delete(ctx context.Context, key string) error
+}
+
+type UseCase struct {
+	shareRepo share.Repository
+	fileRepo  file.Repository
+	storage   Storage
+}
+
+func NewShareUseCase(shareRepo share.Repository, fileRepo file.Repository, storage Storage) *UseCase {
+	return &UseCase{
+		shareRepo: shareRepo,
+		fileRepo:  fileRepo,
+		storage:   storage,
+	}
+}
+
+func (u *UseCase) CreateShareLink(ctx context.Context, input CreateShareInput) (*CreateShareOutput, error) {
+	if input.UserID == uuid.Nil() {
+		return nil, apperr.InvalidInput("share_usecase", "user id is required", nil)
+	}
+
+	if input.FileID == uuid.Nil() {
+		return nil, apperr.InvalidInput("share_usecase", "file id is required", nil)
+	}
+
+	existFile, err := u.fileRepo.FindByID(ctx, input.FileID)
+	if err != nil {
+		if errors.Is(err, file.ErrNotFound) {
+			return nil, apperr.NotFound("share_usecase", "file not found", err)
+		}
+		return nil, apperr.Dependency("share_usecase", "failed to find file", err)
+	}
+
+	if input.UserID != existFile.OwnerID {
+		return nil, apperr.Forbidden("share_usecase", "you do not have access to this file", nil)
+	}
+
+	if input.ExpiresAt != nil && !input.ExpiresAt.After(time.Now()) {
+		return nil, apperr.InvalidInput("share_usecase", "expiration must be in the future", nil)
+	}
+
+	token, err := generateToken()
+	if err != nil {
+		return nil, apperr.Internal("share_usecase", err)
+	}
+
+	now := time.Now().UTC()
+
+	newShare := &share.Share{
+		ID:        uuid.New(),
+		FileID:    input.FileID,
+		TokenHash: hashToken(token),
+		ExpiresAt: input.ExpiresAt,
+		CreatedAt: now,
+	}
+
+	if err := u.shareRepo.Create(ctx, newShare); err != nil {
+		return nil, apperr.Dependency("share_usecase", "failed to create share", err)
+	}
+
+	return &CreateShareOutput{Share: newShare, Token: token}, nil
+}
+
+func (u *UseCase) AccessShare(ctx context.Context, input AccessInput) (*AccessOutput, error) {
+	if input.Token == "" {
+		return nil, apperr.InvalidInput("share_usecase", "share token is required", nil)
+	}
+
+	tokenHash := hashToken(input.Token)
+
+	s, err := u.shareRepo.FindByToken(ctx, tokenHash)
+
+	if err != nil {
+		if errors.Is(err, share.ErrNotFound) {
+			return nil, apperr.NotFound("share_usecase", "share not found", err)
+		}
+
+		return nil, apperr.Dependency("share_usecase", "failed to find share", err)
+	}
+
+	now := time.Now().UTC()
+
+	if !s.IsActive(now) {
+		return nil, apperr.NotFound("share_usecase", "share is no longer available", nil)
+	}
+
+	f, err := u.fileRepo.FindByID(ctx, s.FileID)
+	if err != nil {
+		if errors.Is(err, file.ErrNotFound) {
+			return nil, apperr.NotFound("share_usecase", "file not found", err)
+		}
+
+		return nil, apperr.Dependency("share_usecase", "failed to find file", err)
+	}
+
+	reader, err := u.storage.Open(ctx, f.StorageKey)
+	if err != nil {
+		return nil, apperr.Dependency("share_usecase", "failed to open file", err)
+	}
+
+	return &AccessOutput{Share: s, File: f, Reader: reader}, nil
+}
+
+func (u *UseCase) RevokeShare(ctx context.Context, input RevokeInput) error {
+	if input.UserID == uuid.Nil() {
+		return apperr.InvalidInput("share_usecase", "user id is required", nil)
+	}
+
+	if input.ShareID == uuid.Nil() {
+		return apperr.InvalidInput("share_usecase", "share id is required", nil)
+	}
+
+	s, err := u.shareRepo.FindByID(ctx, input.ShareID)
+	if err != nil {
+		if errors.Is(err, share.ErrNotFound) {
+			return apperr.NotFound("share_usecase", "share not found", err)
+		}
+
+		return apperr.Dependency("share_usecase", "failed to find share", err)
+	}
+
+	f, err := u.fileRepo.FindByID(ctx, s.FileID)
+
+	if err != nil {
+		if errors.Is(err, file.ErrNotFound) {
+			return apperr.NotFound("share_usecase", "file not found", err)
+		}
+
+		return apperr.Dependency("share_usecase", "failed to find file", err)
+	}
+
+	if f.OwnerID != input.UserID {
+		return apperr.Forbidden("share_usecase", "you do not have access to this share", nil)
+	}
+
+	if s.IsRevoked() {
+		return nil
+	}
+
+	s.Revoke(time.Now().UTC())
+
+	if err := u.shareRepo.Update(ctx, s); err != nil {
+		return apperr.Dependency("share_usecase", "failed to revoke share", err)
+	}
+
+	return nil
+}
+
+func generateToken() (string, error) {
+	const tokenSize = 32
+
+	data := make([]byte, tokenSize)
+
+	if _, err := rand.Read(data); err != nil {
+		return "", err
+	}
+
+	return base64.RawURLEncoding.EncodeToString(data), nil
+}
+
+func hashToken(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return base64.RawURLEncoding.EncodeToString(hash[:])
+}
+</file>
+
+<file path="internal/config/config.go">
+package config
+
+import (
+	"github.com/arya237/file-sharing/internal/infrastructure/postgres"
+	"github.com/arya237/file-sharing/internal/infrastructure/security"
+)
+
+type Config struct {
+	DB       postgres.Config    `envPrefix:"POSTGRES_"`
+	JWT      security.JWTConfig `envPrefix:"JWT_"`
+	Filepath string             `env:"FILEPATH"`
+}
+</file>
+
+<file path="internal/delivery/http/handler/auth/auth_handler.go">
+package auth
+
+import (
+	"net/http"
+	"time"
+
+	"github.com/arya237/file-sharing/internal/apperr"
+	"github.com/arya237/file-sharing/internal/application/auth"
+	"github.com/arya237/file-sharing/internal/delivery/http/handler"
+	"github.com/gin-gonic/gin"
+)
+
+type AuthHandler struct {
+	auth *auth.UseCase
+}
+
+func NewAuthHandler(auth *auth.UseCase) *AuthHandler {
+	return &AuthHandler{auth: auth}
+}
+
+func (h *AuthHandler) Register(c *gin.Context) {
+	var req RegisterRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		handler.WriteError(c, apperr.InvalidInput("auth_handler", "invalid request body", err))
+		return
+	}
+
+	output, err := h.auth.Register(c.Request.Context(), &auth.RegisterInput{
+		Username: req.Username,
+		Password: req.Password,
+	})
+
+	if err != nil {
+		handler.WriteError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, RegisterResponse{
+		Username: output.Username,
+		ID:       output.UserID,
+	})
+}
+
+func (h *AuthHandler) Loign(c *gin.Context) {
+	var req LoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		handler.WriteError(c, apperr.InvalidInput("auth_handler", "invalid request body", err))
+		return
+	}
+
+	output, err := h.auth.Login(c.Request.Context(), &auth.LoginInput{
+		Username: req.Username,
+		Password: req.Password,
+	})
+
+	if err != nil {
+		handler.WriteError(c, err)
+	}
+
+	c.SetCookie(
+		"access_token",
+		output.AccessToken,
+		int(12*time.Hour),
+		"/",
+		"",
+		true,
+		true,
+	)
+
+	c.JSON(http.StatusOK, LoginResponse{
+		Message: "login was successful",
+		UserID:  output.UserID,
+	})
+}
+</file>
+
+<file path="internal/delivery/http/handler/auth/dto.go">
+package auth
+
+import "uuid"
+
+type RegisterRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type RegisterResponse struct {
+	Username string    `json:"username"`
+	ID       uuid.UUID `json:"id"`
+}
+
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type LoginResponse struct {
+	Message string    `json:"message"`
+	UserID  uuid.UUID `json:"userID"`
+}
+</file>
+
+<file path="internal/delivery/http/handler/share/share_handler.go">
+package share
+
+import (
+	"fmt"
+	"net/http"
+	"strconv"
+	"uuid"
+
+	"github.com/arya237/file-sharing/internal/apperr"
+	"github.com/arya237/file-sharing/internal/application/share"
+	"github.com/arya237/file-sharing/internal/delivery/http/handler"
+	"github.com/arya237/file-sharing/internal/delivery/http/middleware"
+	"github.com/gin-gonic/gin"
+)
+
+type ShareHandler struct {
+	share *share.UseCase
+}
+
+func NewShareHandler(share *share.UseCase) *ShareHandler {
+	return &ShareHandler{
+		share: share,
+	}
+}
+
+func (h *ShareHandler) Create(c *gin.Context) {
+	userID := getUserID(c)
+
+	if userID == uuid.Nil() {
+		handler.WriteError(c, apperr.Unauthorized("share_handler", "user not authenticated", nil))
+		return
+	}
+
+	fileID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		handler.WriteError(c, apperr.InvalidInput("share_handler", "invalid file id", err))
+		return
+	}
+
+	var req createShareRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		handler.WriteError(c, apperr.InvalidInput("share_handler", "invalid request body", err))
+		return
+	}
+
+	result, err := h.share.CreateShareLink(c.Request.Context(), share.CreateShareInput{
+		FileID:    fileID,
+		UserID:    userID,
+		ExpiresAt: req.ExpiresAt,
+	})
+
+	if err != nil {
+		handler.WriteError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, createShareResponse{
+		ID:        result.Share.ID,
+		URL:       "/api/shares/" + result.Token,
+		ExpiresAt: result.Share.ExpiresAt,
+	})
+}
+
+func (h *ShareHandler) AccessShare(c *gin.Context) {
+	token := c.Param("token")
+
+	if token == "" {
+		handler.WriteError(c, apperr.NotFound("share_handler", "share not found", nil))
+		return
+	}
+
+	// TODO check result io.ReadSeeker or io.ReadCloser
+	result, err := h.share.AccessShare(c.Request.Context(), share.AccessInput{
+		Token: token,
+	})
+	if err != nil {
+		handler.WriteError(c, err)
+		return
+	}
+
+	c.Header(
+		"Content-Disposition",
+		fmt.Sprintf(`attachment; filename="%s"`, result.File.Name),
+	)
+	c.Header("Content-Type", result.File.MIMEType)
+	c.Header("Content-Length", strconv.FormatInt(result.File.Size, 10))
+
+	http.ServeContent(
+		c.Writer,
+		c.Request,
+		result.File.Name,
+		result.File.CreatedAt,
+		result.Reader,
+	)
+
+	result.Reader.Close()
+}
+
+func (h *ShareHandler) RevokeShare(c *gin.Context) {
+	userID := getUserID(c)
+	if userID == uuid.Nil() {
+		handler.WriteError(c, apperr.Unauthorized("share_handler", "user not authenticated", nil))
+		return
+	}
+
+	shareID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.Error(apperr.InvalidInput("share_handler", "invalid share id", err))
+		return
+	}
+
+	err = h.share.RevokeShare(c.Request.Context(), share.RevokeInput{
+		UserID:  userID,
+		ShareID: shareID,
+	})
+
+	if err != nil {
+		handler.WriteError(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func getUserID(c *gin.Context) uuid.UUID {
+	value, exists := c.Get(middleware.UserIDKey)
+	if !exists {
+		return uuid.Nil()
+	}
+
+	userID, ok := value.(uuid.UUID)
+	if !ok {
+		return uuid.Nil()
+	}
+
+	return userID
+}
+</file>
+
+<file path="internal/delivery/http/handler/error.go">
+package handler
+
+import (
+	"log"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+
+	"github.com/arya237/file-sharing/internal/apperr"
+)
+
+func WriteError(c *gin.Context, err error) {
+	log.Println(err)
+	appErr, ok := apperr.As(err)
+
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"code":    apperr.ErrInternal,
+				"message": "internal server error",
+			},
+		})
+		return
+	}
+
+	c.JSON(appErr.Status, gin.H{
+		"error": gin.H{
+			"code":    appErr.Code,
+			"message": appErr.Message,
+		},
+	})
+}
+</file>
+
+
+<file path="internal/domain/share/share_repository.go">
+package share
+
+import (
+	"context"
+	"errors"
+
+	"uuid"
+)
+
+var ErrNotFound = errors.New("share not found")
+
+type Repository interface {
+	Create(ctx context.Context, share *Share) error
+	FindByToken(ctx context.Context, tokenHash string) (*Share, error)
+	FindByID(ctx context.Context, id uuid.UUID) (*Share, error)
+	Update(ctx context.Context, share *Share) error
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+</file>
+
+<file path="internal/infrastructure/postgres/file_repository.go">
+package postgres
+
+import (
+	"context"
+	"errors"
+
+	"uuid"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/arya237/file-sharing/internal/domain/file"
+)
+
+type FileRepository struct {
+	db *pgxpool.Pool
+}
+
+func NewFileRepository(db *pgxpool.Pool) *FileRepository {
+	return &FileRepository{
+		db: db,
+	}
+}
+
+func (r *FileRepository) Create(
+	ctx context.Context,
+	f *file.File,
+) error {
+	const query = `
+		INSERT INTO files (
+			id,
+			owner_id,
+			original_name,
+			storage_key,
+			mime_type,
+			size,
+			created_at,
+			updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`
+
+	_, err := r.db.Exec(
+		ctx,
+		query,
+		f.ID,
+		f.OwnerID,
+		f.Name,
+		f.StorageKey,
+		f.MIMEType,
+		f.Size,
+		f.CreatedAt,
+		f.UpdatedAt,
+	)
+
+	return err
+}
+
+func (r *FileRepository) FindByID(
+	ctx context.Context,
+	id uuid.UUID,
+) (*file.File, error) {
+	const query = `
+		SELECT
+			id,
+			owner_id,
+			original_name,
+			storage_key,
+			mime_type,
+			size,
+			created_at,
+			updated_at
+		FROM files
+		WHERE id = $1
+	`
+
+	var f file.File
+
+	err := r.db.QueryRow(ctx, query, id).Scan(
+		&f.ID,
+		&f.OwnerID,
+		&f.Name,
+		&f.StorageKey,
+		&f.MIMEType,
+		&f.Size,
+		&f.CreatedAt,
+		&f.UpdatedAt,
+	)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, file.ErrNotFound
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &f, nil
+}
+
+func (r *FileRepository) ListByOwner(
+	ctx context.Context,
+	ownerID uuid.UUID,
+	offset int,
+	limit int,
+) ([]file.File, error) {
+	const query = `
+		SELECT
+			id,
+			owner_id,
+			original_name,
+			storage_key,
+			mime_type,
+			size,
+			created_at,
+			updated_at
+		FROM files
+		WHERE owner_id = $1
+		ORDER BY created_at DESC
+		OFFSET $2
+		LIMIT $3
+	`
+
+	rows, err := r.db.Query(ctx, query, ownerID, offset, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	files := make([]file.File, 0)
+
+	for rows.Next() {
+		var f file.File
+
+		if err := rows.Scan(
+			&f.ID,
+			&f.OwnerID,
+			&f.Name,
+			&f.StorageKey,
+			&f.MIMEType,
+			&f.Size,
+			&f.CreatedAt,
+			&f.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+
+		files = append(files, f)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return files, nil
+}
+
+func (r *FileRepository) Delete(
+	ctx context.Context,
+	id uuid.UUID,
+) error {
+	const query = `
+		DELETE FROM files
+		WHERE id = $1
+	`
+
+	tag, err := r.db.Exec(ctx, query, id)
+	if err != nil {
+		return err
+	}
+
+	if tag.RowsAffected() == 0 {
+		return file.ErrNotFound
+	}
+
+	return err
+}
+</file>
+
+<file path="internal/infrastructure/postgres/share_repository.go">
+package postgres
+
+import (
+	"context"
+	"errors"
+
+	"uuid"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/arya237/file-sharing/internal/domain/share"
+)
+
+type ShareRepository struct {
+	db *pgxpool.Pool
+}
+
+func NewShareRepository(db *pgxpool.Pool) *ShareRepository {
+	return &ShareRepository{
+		db: db,
+	}
+}
+
+func (r *ShareRepository) Create(
+	ctx context.Context,
+	s *share.Share,
+) error {
+	const query = `
+		INSERT INTO shares (
+			id,
+			file_id,
+			token_hash,
+			expires_at,
+			created_at,
+			revoked_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`
+
+	_, err := r.db.Exec(
+		ctx,
+		query,
+		s.ID,
+		s.FileID,
+		s.TokenHash,
+		s.ExpiresAt,
+		s.CreatedAt,
+		s.RevokedAt,
+	)
+
+	return err
+}
+
+func (r *ShareRepository) FindByToken(
+	ctx context.Context,
+	tokenHash string,
+) (*share.Share, error) {
+	const query = `
+		SELECT
+			id,
+			file_id,
+			token_hash,
+			expires_at,
+			created_at,
+			revoked_at
+		FROM shares
+		WHERE token_hash = $1
+	`
+
+	var s share.Share
+
+	err := r.db.QueryRow(
+		ctx,
+		query,
+		tokenHash,
+	).Scan(
+		&s.ID,
+		&s.FileID,
+		&s.TokenHash,
+		&s.ExpiresAt,
+		&s.CreatedAt,
+		&s.RevokedAt,
+	)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, share.ErrNotFound
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &s, nil
+}
+
+func (r *ShareRepository) FindByID(
+	ctx context.Context,
+	id uuid.UUID,
+) (*share.Share, error) {
+	const query = `
+		SELECT
+			id,
+			file_id,
+			token_hash,
+			expires_at,
+			created_at,
+			revoked_at
+		FROM shares
+		WHERE id = $1
+	`
+
+	var s share.Share
+
+	err := r.db.QueryRow(
+		ctx,
+		query,
+		id,
+	).Scan(
+		&s.ID,
+		&s.FileID,
+		&s.TokenHash,
+		&s.ExpiresAt,
+		&s.CreatedAt,
+		&s.RevokedAt,
+	)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, share.ErrNotFound
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &s, nil
+}
+
+func (r *ShareRepository) Update(
+	ctx context.Context,
+	s *share.Share,
+) error {
+	const query = `
+		UPDATE shares
+		SET
+			expires_at = $1,
+			revoked_at = $2
+		WHERE id = $3
+	`
+
+	tag, err := r.db.Exec(
+		ctx,
+		query,
+		s.ExpiresAt,
+		s.RevokedAt,
+		s.ID,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if tag.RowsAffected() == 0 {
+		return share.ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *ShareRepository) Delete(
+	ctx context.Context,
+	id uuid.UUID,
+) error {
+	const query = `
+		DELETE FROM shares
+		WHERE id = $1
+	`
+
+	tag, err := r.db.Exec(ctx, query, id)
+	if err != nil {
+		return err
+	}
+
+	if tag.RowsAffected() == 0 {
+		return share.ErrNotFound
+	}
+
+	return nil
+}
+</file>
+
+
+<file path="internal/application/file/file.go">
+package file
+
+import (
+	"context"
+	"errors"
+	"io"
+	"path/filepath"
+	"strings"
+	"time"
+	"uuid"
+
+	"github.com/arya237/file-sharing/internal/apperr"
+	"github.com/arya237/file-sharing/internal/domain/file"
+)
+
+type ReadSeekCloser interface {
+	io.Reader
+	io.Seeker
+	io.Closer
+}
+
+type Storage interface {
+	Save(ctx context.Context, key string, reader io.Reader) error
+	Open(ctx context.Context, key string) (ReadSeekCloser, error)
+	Delete(ctx context.Context, key string) error
+}
+
+type UseCase struct {
+	fileRepo file.Repository
+	storage  Storage
+}
+
+func NewFileUseCase(repo file.Repository, storage Storage) *UseCase {
+	return &UseCase{
+		fileRepo: repo,
+		storage:  storage,
+	}
+}
+
+func (u *UseCase) UploadFile(ctx context.Context, input UploadInput) (*UploadOutput, error) {
+	name := strings.TrimSpace(input.Name)
+
+	if name == "" {
+		return nil, apperr.InvalidInput("file_usecase", "file name is required", nil)
+	}
+
+	if input.OwnerID == uuid.Nil() {
+		return nil, apperr.InvalidInput("file_usecase", "owner is required", nil)
+	}
+
+	if input.Reader == nil {
+		return nil, apperr.InvalidInput("file", "file content is required", nil)
+	}
+
+	if input.Size <= 0 || input.Size > 1024*1024*100 {
+		return nil, apperr.InvalidInput(
+			"file",
+			"File size ranges from 1 B to 100 MB.",
+			nil,
+		)
+	}
+
+	now := time.Now().UTC()
+
+	newFile := &file.File{
+		ID:         uuid.New(),
+		OwnerID:    input.OwnerID,
+		Name:       filepath.Base(name),
+		StorageKey: uuid.New().String(),
+		MIMEType:   input.MIMEType,
+		Size:       input.Size,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+
+	err := u.storage.Save(ctx, newFile.StorageKey, input.Reader)
+	if err != nil {
+		return nil, apperr.Dependency("file_usecase", "failed to store file", err)
+	}
+
+	if err := u.fileRepo.Create(ctx, newFile); err != nil {
+		return nil, apperr.Dependency("file_usecase", "failed to save file metadate", err)
+	}
+
+	return &UploadOutput{File: newFile}, nil
+
+}
+
+func (u *UseCase) ListFile(ctx context.Context, input ListInput) (*ListOutput, error) {
+	if input.OwnerID == uuid.Nil() {
+		return nil, apperr.InvalidInput("file_usecase", "owner is required", nil)
+	}
+
+	if input.Offset < 0 {
+		return nil, apperr.InvalidInput("file_usecase", "offset must be greater than or equal to zero", nil)
+	}
+
+	if input.Limit <= 0 {
+		return nil, apperr.InvalidInput("file_usecase", "limit must be greater than zero", nil)
+	}
+
+	files, err := u.fileRepo.ListByOwner(ctx, input.OwnerID, input.Offset, input.Limit)
+	if err != nil {
+		return nil, apperr.Dependency("file_usecase", "failed to list files", err)
+	}
+
+	return &ListOutput{Files: files}, nil
+}
+
+func (u *UseCase) DownloadFile(ctx context.Context, input DownloadInput) (*DownloadOutput, error) {
+
+	if input.FileID == uuid.Nil() {
+		return nil, apperr.InvalidInput("file_usecase", "file id is required", nil)
+	}
+
+	if input.OwnerID == uuid.Nil() {
+		return nil, apperr.InvalidInput("file_usecase", "owner is required", nil)
+	}
+
+	f, err := u.fileRepo.FindByID(ctx, input.FileID)
+	if err != nil {
+		if errors.Is(err, file.ErrNotFound) {
+			return nil, apperr.NotFound("file_usecase", "file not found", err)
+		}
+
+		return nil, apperr.Dependency("file_usecase", "failed to find file", err)
+	}
+
+	if f.OwnerID != input.OwnerID {
+		return nil, apperr.Forbidden("file_usecase", "you do not have access to this file", nil)
+	}
+
+	reader, err := u.storage.Open(ctx, f.StorageKey)
+	if err != nil {
+		return nil, apperr.Dependency("file_usecase", "failed to open file", err)
+	}
+
+	return &DownloadOutput{File: f, Reader: reader}, nil
+}
+
+func (u *UseCase) DeleteFile(ctx context.Context, fileID uuid.UUID, ownerID uuid.UUID) error {
+	if fileID == uuid.Nil() {
+		return apperr.InvalidInput("file", "file id is required", nil)
+	}
+
+	if ownerID == uuid.Nil() {
+		return apperr.InvalidInput("file", "owner is required", nil)
+	}
+
+	f, err := u.fileRepo.FindByID(ctx, fileID)
+	if err != nil {
+		if errors.Is(err, file.ErrNotFound) {
+			return apperr.NotFound("file", "file not found", err)
+		}
+
+		return apperr.Dependency("file", "failed to find file", err)
+	}
+
+	if f.OwnerID != ownerID {
+		return apperr.Forbidden("file", "you do not have access to this file", nil)
+	}
+
+	if err := u.storage.Delete(ctx, f.StorageKey); err != nil {
+		return apperr.Dependency("file", "failed to delete file from storage", err)
+	}
+
+	if err := u.fileRepo.Delete(ctx, fileID); err != nil {
+		return apperr.Dependency("file", "failed to delete file metadata", err)
+	}
+
+	return nil
+}
+</file>
+
+<file path="internal/domain/file/file_repository.go">
+package file
+
+import (
+	"context"
+	"errors"
+	"uuid"
+)
+
+var ErrNotFound = errors.New("file not found")
+
+type Repository interface {
+	Create(ctx context.Context, file *File) error
+	FindByID(ctx context.Context, id uuid.UUID) (*File, error)
+	ListByOwner(ctx context.Context, ownerID uuid.UUID, offset, limit int) ([]File, error)
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+</file>
+
+<file path="cmd/main.go">
+package main
+
+import (
+	"context"
+	"log"
+
+	authService "github.com/arya237/file-sharing/internal/application/auth"
+	fileService "github.com/arya237/file-sharing/internal/application/file"
+	shareService "github.com/arya237/file-sharing/internal/application/share"
+	"github.com/arya237/file-sharing/internal/delivery/http/handler/share"
+	"github.com/arya237/file-sharing/internal/infrastructure/storage/local"
+
+	"github.com/arya237/file-sharing/internal/config"
+	"github.com/arya237/file-sharing/internal/delivery/http"
+	auth "github.com/arya237/file-sharing/internal/delivery/http/handler/auth"
+	file "github.com/arya237/file-sharing/internal/delivery/http/handler/file"
+	"github.com/arya237/file-sharing/internal/infrastructure/postgres"
+	"github.com/arya237/file-sharing/internal/infrastructure/security"
+)
+
+func main() {
+	ctx := context.Background()
+	cfg := config.New()
+
+	db, err := postgres.NewPool(ctx, cfg.DB)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	passwordHasher := security.NewBcryptPasswordHasher(0)
+	tokenService := security.NewJWTTokenService(cfg.JWT.Secret, cfg.JWT.Expire)
+
+	userRepo := postgres.NewUserRepository(db)
+	fileRepo := postgres.NewFileRepository(db)
+	shareRepo := postgres.NewShareRepository(db)
+	storageRepo := local.NewStorage(cfg.Filepath)
+
+	authUsecase := authService.NewUseCase(userRepo, passwordHasher, tokenService)
+	fileUsecase := fileService.NewFileUseCase(fileRepo, storageRepo)
+	shareUsecase := shareService.NewShareUseCase(shareRepo, fileRepo, storageRepo)
+
+	authHandler := auth.NewAuthHandler(authUsecase)
+	fileHandler := file.NewFileHandler(fileUsecase)
+	shareHandler := share.NewShareHandler(shareUsecase)
+
+	router := http.NewRouter(authHandler, fileHandler, shareHandler, tokenService)
+
+	log.Fatal(router.Run("localhost:8080"))
+
+}
+</file>
+
+
+<file path="internal/application/auth/auth.go">
+package auth
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"time"
+	"uuid"
+
+	"github.com/arya237/file-sharing/internal/apperr"
+	"github.com/arya237/file-sharing/internal/domain/user"
+)
+
+type PasswordHasher interface {
+	Hash(password string) (string, error)
+	Compare(hash, password string) error
+}
+
+type TokenService interface {
+	Generate(userID uuid.UUID) (string, error)
+}
+
+type UseCase struct {
+	users          user.Repository
+	passwordHasher PasswordHasher
+	tokenService   TokenService
+}
+
+func NewUseCase(users user.Repository, passwordHasher PasswordHasher, tokenService TokenService) *UseCase {
+	return &UseCase{
+		users:          users,
+		passwordHasher: passwordHasher,
+		tokenService:   tokenService,
+	}
+}
+
+func (u *UseCase) Register(ctx context.Context, input *RegisterInput) (*RegisterOutput, error) {
+	username := strings.TrimSpace(input.Username)
+
+	if username == "" {
+		return nil, apperr.InvalidInput("auth_usecase", "username is required", nil)
+	}
+
+	if input.Password == "" {
+		return nil, apperr.InvalidInput("auth_usecase", "password is required", nil)
+	}
+
+	passwordHash, err := u.passwordHasher.Hash(input.Password)
+	if err != nil {
+		return nil, apperr.Dependency("auth_usecase", "failed to hash password", err)
+	}
+
+	now := time.Now().UTC()
+
+	newUser := &user.User{
+		ID:           uuid.New(),
+		Username:     username,
+		PasswordHash: passwordHash,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+
+	if err := u.users.Create(ctx, newUser); err != nil {
+		if errors.Is(err, user.ErrConflict) {
+			return nil, apperr.Conflict("auth_usecase", "username already exists", err)
+		}
+
+		return nil, apperr.Dependency("auth_usecase", "failed to create user", err)
+	}
+
+	return &RegisterOutput{UserID: newUser.ID, Username: newUser.Username}, nil
+}
+
+func (u *UseCase) Login(ctx context.Context, input *LoginInput) (*LoginOutput, error) {
+	username := strings.TrimSpace(input.Username)
+
+	if username == "" || input.Password == "" {
+		return nil, apperr.InvalidInput("auth_usecase", "username or password is required", nil)
+	}
+
+	existingUser, err := u.users.FindByUsername(ctx, username)
+	if err != nil {
+		if errors.Is(err, user.ErrNotFound) {
+			return nil, apperr.Unauthorized("auth_usecase", "invalid username or password", nil)
+		}
+		return nil, apperr.Dependency("auth_usecase", "failed to find user", err)
+	}
+
+	if err := u.passwordHasher.Compare(existingUser.PasswordHash, input.Password); err != nil {
+		return nil, apperr.Unauthorized("auth_usecase", "invalid username or password", nil)
+	}
+
+	token, err := u.tokenService.Generate(existingUser.ID)
+	if err != nil {
+		return nil, apperr.Dependency(
+			"auth",
+			"failed to generate access token",
+			err,
+		)
+	}
+
+	return &LoginOutput{AccessToken: token, UserID: existingUser.ID}, nil
+}
+</file>
+
+</files>
