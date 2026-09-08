@@ -2,9 +2,11 @@ package postgres
 
 import (
 	"context"
+	"errors"
 
 	"uuid"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/arya237/file-sharing/internal/domain/share"
@@ -50,7 +52,7 @@ func (r *ShareRepository) Create(
 	return err
 }
 
-func (r *ShareRepository) FindByTokenHash(
+func (r *ShareRepository) FindByToken(
 	ctx context.Context,
 	tokenHash string,
 ) (*share.Share, error) {
@@ -68,7 +70,11 @@ func (r *ShareRepository) FindByTokenHash(
 
 	var s share.Share
 
-	err := r.db.QueryRow(ctx, query, tokenHash).Scan(
+	err := r.db.QueryRow(
+		ctx,
+		query,
+		tokenHash,
+	).Scan(
 		&s.ID,
 		&s.FileID,
 		&s.TokenHash,
@@ -77,6 +83,10 @@ func (r *ShareRepository) FindByTokenHash(
 		&s.RevokedAt,
 	)
 
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, share.ErrNotFound
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -84,10 +94,10 @@ func (r *ShareRepository) FindByTokenHash(
 	return &s, nil
 }
 
-func (r *ShareRepository) ListByFile(
+func (r *ShareRepository) FindByID(
 	ctx context.Context,
-	fileID uuid.UUID,
-) ([]share.Share, error) {
+	id uuid.UUID,
+) (*share.Share, error) {
 	const query = `
 		SELECT
 			id,
@@ -97,40 +107,33 @@ func (r *ShareRepository) ListByFile(
 			created_at,
 			revoked_at
 		FROM shares
-		WHERE file_id = $1
-		ORDER BY created_at DESC
+		WHERE id = $1
 	`
 
-	rows, err := r.db.Query(ctx, query, fileID)
+	var s share.Share
+
+	err := r.db.QueryRow(
+		ctx,
+		query,
+		id,
+	).Scan(
+		&s.ID,
+		&s.FileID,
+		&s.TokenHash,
+		&s.ExpiresAt,
+		&s.CreatedAt,
+		&s.RevokedAt,
+	)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, share.ErrNotFound
+	}
+
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	shares := make([]share.Share, 0)
-
-	for rows.Next() {
-		var s share.Share
-
-		if err := rows.Scan(
-			&s.ID,
-			&s.FileID,
-			&s.TokenHash,
-			&s.ExpiresAt,
-			&s.CreatedAt,
-			&s.RevokedAt,
-		); err != nil {
-			return nil, err
-		}
-
-		shares = append(shares, s)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return shares, nil
+	return &s, nil
 }
 
 func (r *ShareRepository) Update(
@@ -145,7 +148,7 @@ func (r *ShareRepository) Update(
 		WHERE id = $3
 	`
 
-	_, err := r.db.Exec(
+	tag, err := r.db.Exec(
 		ctx,
 		query,
 		s.ExpiresAt,
@@ -153,5 +156,34 @@ func (r *ShareRepository) Update(
 		s.ID,
 	)
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	if tag.RowsAffected() == 0 {
+		return share.ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *ShareRepository) Delete(
+	ctx context.Context,
+	id uuid.UUID,
+) error {
+	const query = `
+		DELETE FROM shares
+		WHERE id = $1
+	`
+
+	tag, err := r.db.Exec(ctx, query, id)
+	if err != nil {
+		return err
+	}
+
+	if tag.RowsAffected() == 0 {
+		return share.ErrNotFound
+	}
+
+	return nil
 }
