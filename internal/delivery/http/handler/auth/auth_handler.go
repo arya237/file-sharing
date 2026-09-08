@@ -72,3 +72,8 @@ func (h *AuthHandler) Loign(c *gin.Context) {
 		UserID:  output.UserID,
 	})
 }
+
+func (h *AuthHandler) Logout(c *gin.Context) {
+	c.SetCookie("access_token", "", -1, "/", "", true, true)
+	c.Status(http.StatusNoContent)
+}
