@@ -2,9 +2,11 @@ package postgres
 
 import (
 	"context"
+	"errors"
 
 	"uuid"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/arya237/file-sharing/internal/domain/file"
@@ -85,6 +87,10 @@ func (r *FileRepository) FindByID(
 		&f.UpdatedAt,
 	)
 
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, file.ErrNotFound
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +164,14 @@ func (r *FileRepository) Delete(
 		WHERE id = $1
 	`
 
-	_, err := r.db.Exec(ctx, query, id)
+	tag, err := r.db.Exec(ctx, query, id)
+	if err != nil {
+		return err
+	}
+
+	if tag.RowsAffected() == 0 {
+		return file.ErrNotFound
+	}
 
 	return err
 }

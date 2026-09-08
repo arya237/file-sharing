@@ -2,8 +2,6 @@ package middleware
 
 import (
 	"net/http"
-	"strings"
-
 	"uuid"
 
 	"github.com/gin-gonic/gin"
@@ -17,9 +15,10 @@ type TokenValidator interface {
 
 func Auth(tokenValidator TokenValidator) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		token, err := c.Cookie("Authorization")
+		token, err := c.Cookie("access_token")
 		if err != nil {
 			unauthorized(c)
+			return
 		}
 
 		if token == "" {
@@ -27,16 +26,7 @@ func Auth(tokenValidator TokenValidator) gin.HandlerFunc {
 			return
 		}
 
-		parts := strings.SplitN(token, " ", 2)
-
-		if len(parts) != 2 ||
-			!strings.EqualFold(parts[0], "Bearer") ||
-			parts[1] == "" {
-			unauthorized(c)
-			return
-		}
-
-		userID, err := tokenValidator.Validate(parts[1])
+		userID, err := tokenValidator.Validate(token)
 		if err != nil {
 			unauthorized(c)
 			return

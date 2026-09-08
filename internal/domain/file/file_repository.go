@@ -2,9 +2,11 @@ package file
 
 import (
 	"context"
-
+	"errors"
 	"uuid"
 )
+
+var ErrNotFound = errors.New("user not found")
 
 type Repository interface {
 	Create(ctx context.Context, file *File) error

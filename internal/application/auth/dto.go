@@ -19,4 +19,5 @@ type LoginInput struct {
 
 type LoginOutput struct {
 	AccessToken string
+	UserID      uuid.UUID
 }
