@@ -149,7 +149,7 @@ func (u *UseCase) DeleteFile(ctx context.Context, fileID uuid.UUID, ownerID uuid
 	}
 
 	if err := u.storage.Delete(ctx, f.StorageKey); err != nil {
-		return apperr.Dependency("file", "failed to delete file from storage", err)
+		return apperr.Dependency("file", "failed to delete file from files", err)
 	}
 
 	if err := u.fileRepo.Delete(ctx, fileID); err != nil {
