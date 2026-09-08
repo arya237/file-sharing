@@ -3,28 +3,22 @@ package file
 import (
 	"context"
 	"errors"
-	"io"
 	"path/filepath"
 	"strings"
 	"time"
 	"uuid"
 
 	"github.com/arya237/file-sharing/internal/apperr"
+	"github.com/arya237/file-sharing/internal/application/storage"
 	"github.com/arya237/file-sharing/internal/domain/file"
 )
 
-type Storage interface {
-	Save(ctx context.Context, key string, reader io.Reader) error
-	Open(ctx context.Context, key string) (io.ReadCloser, error)
-	Delete(ctx context.Context, key string) error
-}
-
 type UseCase struct {
 	fileRepo file.Repository
-	storage  Storage
+	storage  storage.Storage
 }
 
-func NewFileUseCase(repo file.Repository, storage Storage) *UseCase {
+func NewFileUseCase(repo file.Repository, storage storage.Storage) *UseCase {
 	return &UseCase{
 		fileRepo: repo,
 		storage:  storage,
@@ -155,7 +149,7 @@ func (u *UseCase) DeleteFile(ctx context.Context, fileID uuid.UUID, ownerID uuid
 	}
 
 	if err := u.storage.Delete(ctx, f.StorageKey); err != nil {
-		return apperr.Dependency("file", "failed to delete file from storage", err)
+		return apperr.Dependency("file", "failed to delete file from files", err)
 	}
 
 	if err := u.fileRepo.Delete(ctx, fileID); err != nil {

@@ -6,7 +6,7 @@ import (
 	"uuid"
 )
 
-var ErrNotFound = errors.New("user not found")
+var ErrNotFound = errors.New("file not found")
 
 type Repository interface {
 	Create(ctx context.Context, file *File) error
