@@ -25,9 +25,10 @@ type AccessInput struct {
 }
 
 type AccessOutput struct {
-	Share  *share.Share
-	File   *file.File
-	Reader io.ReadCloser
+	Share *share.Share
+	File  *file.File
+	//Reader io.ReadCloser
+	Reader io.ReadSeeker
 }
 
 type RevokeInput struct {

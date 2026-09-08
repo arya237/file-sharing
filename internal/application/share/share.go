@@ -50,6 +50,10 @@ func (u *UseCase) CreateShareLink(ctx context.Context, input CreateShareInput) (
 		return nil, apperr.Forbidden("share_usecase", "you do not have access to this file", nil)
 	}
 
+	if input.ExpiresAt != nil && !input.ExpiresAt.After(time.Now()) {
+		return nil, apperr.InvalidInput("share_usecase", "expiration must be in the future", nil)
+	}
+
 	token, err := generateToken()
 	if err != nil {
 		return nil, apperr.Internal("share_usecase", err)
