@@ -1,4 +1,5 @@
 .env
+repomix-output.xml
 
 files
 frontend/node_modules

@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 	"log"
+	"time"
+	"os/signal"
+	"syscall"
 
 	authService "github.com/arya237/file-sharing/internal/application/auth"
 	fileService "github.com/arya237/file-sharing/internal/application/file"
@@ -19,13 +22,22 @@ import (
 )
 
 func main() {
-	ctx := context.Background()
+	
+	ctx, stop := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGINT,
+		syscall.SIGTERM,
+	)
+	defer stop()
+
 	cfg := config.New()
 
 	db, err := postgres.NewPool(ctx, cfg.DB)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	defer db.Close()
 
 	passwordHasher := security.NewBcryptPasswordHasher(0)
 	tokenService := security.NewJWTTokenService(cfg.JWT.Secret, cfg.JWT.Expire)
@@ -45,6 +57,7 @@ func main() {
 
 	router := http.NewRouter(authHandler, fileHandler, shareHandler, tokenService)
 
-	log.Fatal(router.Run("localhost:8080"))
+	server := http.NewServer(cfg.Server.Address, router, 10 * time.Second)
 
+	server.Run(ctx)
 }
