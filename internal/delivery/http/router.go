@@ -24,6 +24,7 @@ func NewRouter(
 
 	authGroup.POST("/register", auth_handler.Register)
 	authGroup.POST("/login", auth_handler.Loign)
+	authGroup.POST("/logout", auth_handler.Logout)
 
 	fileGroup.Use(middleware.Auth(tokenValidator))
 
