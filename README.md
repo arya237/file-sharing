@@ -160,6 +160,7 @@ cp .env.example .env
 Example configuration:
 
 ```env
+SERVER_ADDRESS=0.0.0.0:8080
 POSTGRES_HOST=localhost
 POSTGRES_USER=file_sharing
 POSTGRES_PASSWORD=file_sharing
@@ -232,7 +233,7 @@ go run cmd/main.go
 The backend will start on:
 
 ```text
-http://localhost:8080
+http://0.0.0.0:8080
 ```
 
 ---
