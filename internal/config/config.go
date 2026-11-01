@@ -1,0 +1,18 @@
+package config
+
+import (
+	"github.com/arya237/file-sharing/internal/infrastructure/postgres"
+	"github.com/arya237/file-sharing/internal/infrastructure/security"
+)
+
+type Config struct {
+	Server   ServerConfig		`envPrefix:"SERVER_"`
+	DB       postgres.Config    `envPrefix:"POSTGRES_"`
+	JWT      security.JWTConfig `envPrefix:"JWT_"`
+	Filepath string             `env:"FILEPATH"`
+}
+
+
+type ServerConfig struct{
+	Address string	`env:"ADDRESS"`
+}
